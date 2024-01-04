@@ -1,0 +1,74 @@
+---
+title: "240103_waterstanden"
+author: "Robbe Van Molle"
+date: "2024-01-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+# Installeer de benodigde pakketten als ze nog niet geïnstalleerd zijn
+if (!require("httr")) install.packages("httr")
+if (!require("jsonlite")) install.packages("jsonlite")
+
+# Laad de bibliotheken
+library(httr)
+library(jsonlite)
+
+library(lubridate)
+library(dplyr)
+
+# Stel de URL in
+url <- "https://www.waterinfo.be/tsmpub/KiWIS/KiWIS?service=kisters&type=queryServices&request=getTimeseriesValueLayer&datasource=0&format=esrijson&timeseriesgroup_id=04156152%2C01111236&metadata=true&custattr_returnfields=dataprovider%2Cdataowner%2Csignificant%2CPortal_Bekken&crs=webmercator&invalidValue=-2&invalidPeriod=P6H&md_returnfields=stationparameter_name%2Cstation_name%2Cstation_no%2Ccustom_attributes&userId=PortalPublic"
+
+# Haal de data op
+response <- GET(url)
+
+  # Zet de inhoud van de respons om in tekst
+  text_content <- content(response, "text")
+  
+  # Parse de JSON data
+  json_data <- fromJSON(text_content)
+  
+  # Zet de data om naar een dataframe (pas deze stap aan aan de structuur van je JSON)
+  data_frame <- as.data.frame(json_data)
+
+
+
+data_set <- data_frame$features.attributes
+
+# Zet de 'datetime' kolom om van een tekst naar een datetime formaat
+data_set$datetime <- ymd_hms(data_set$datetime)
+
+# Converteer en formatteer de 'datetime' kolom naar een leesbaarder formaat
+data_set$datetime <- data_set$datetime %>%
+                     format("%e %B %Y %H:%M")
+# Laad de dplyr bibliotheek
+library(dplyr)
+
+# Stap 1: Filter negatieve getallen en cellen zonder waardes
+data_set <- data_set %>% 
+  filter(ts_value >= 0 & !is.na(ts_value))
+
+# Stap 2: Maak een nieuwe kolom 'Actuele.status'
+data_set <- data_set %>%
+  mutate(Actuele.status = case_when(
+    ts_value == 3 ~ "Alarm",
+    ts_value == 2 ~ "Waak",
+    ts_value == 1 ~ "Pre-Waak",
+    ts_value == 0 ~ "Normaal",
+    TRUE ~ as.character(ts_value)  # Voor het geval er onverwachte waarden zijn
+  ))
+
+data_set <- data_set %>%
+  arrange(ts_value)
+
+  # Schrijf de data naar een CSV-bestand
+write.csv(data_set, "data_set.csv")
+
+```
+
